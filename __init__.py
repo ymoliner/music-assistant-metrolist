@@ -81,11 +81,14 @@ class MetrolistProvider(PlayerProvider):
             self.room_task.cancel()
             await asyncio.gather(self.room_task, return_exceptions=True)
             self.room_task = None
+        if self.player:
+            await self.mass.players.unregister(self.player.player_id)
+            self.player = None
         if self.session:
             await self.session.close()
             self.session = None
 
     async def discover_players(self) -> None:
         """Re-register the room player after a discovery request."""
-        if self.player and not self.get_protocol(self.player.protocol_id):
+        if self.player and not self.mass.players.get_player(self.player.player_id):
             await self.mass.players.register(self.player)
