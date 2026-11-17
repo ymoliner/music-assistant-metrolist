@@ -1,0 +1,11 @@
+{
+  "type": "player",
+  "domain": "metrolist_listen_together",
+  "name": "Metrolist Listen Together",
+  "description": "Control a Metrolist Listen Together room from Music Assistant.",
+  "codeowners": ["@ymoliner"],
+  "tier": "community",
+  "stage": "experimental",
+  "requirements": [],
+  "multi_instance": true
+}
