@@ -6,17 +6,14 @@ import time
 from typing import Any
 from urllib.parse import urlparse
 
-from music_assistant.models.player import PlayerMedia
-from music_assistant.models.player_protocol import PlayerProtocol
-from music_assistant_models.enums import PlaybackState, PlayerFeature, ProtocolRole
+from music_assistant.models.player import Player, PlayerMedia
+from music_assistant_models.enums import PlaybackState, PlayerFeature
 
 from .protocol import MetroSession
 
 
-class MetrolistPlayer(PlayerProtocol):
+class MetrolistPlayer(Player):
     """A virtual player whose output is a Metrolist Listen Together room."""
-
-    _attr_role = ProtocolRole.NATIVE
 
     def __init__(self, provider: Any, session: MetroSession) -> None:
         super().__init__(provider, f"metrolist_{session.room_code.lower()}")
@@ -46,19 +43,18 @@ class MetrolistPlayer(PlayerProtocol):
         track = self._track_from_media(media)
         upcoming: list[dict[str, Any]] = []
         queue_title: str | None = None
-        if self.player:
-            queue = self.mass.player_queues.get_active_queue(self.player.player_id)
-            if queue:
-                queue_title = queue.display_name
-                items = self.mass.player_queues.items(queue.queue_id, limit=500)
-                start = (queue.current_index + 1) if queue.current_index is not None else 0
-                for item in items[start : start + 100]:
-                    if item.media_item is None:
-                        continue
-                    try:
-                        upcoming.append(self._track_from_item(item.media_item))
-                    except ValueError:
-                        continue
+        queue = self.mass.player_queues.get_active_queue(self.player_id)
+        if queue:
+            queue_title = queue.display_name
+            items = self.mass.player_queues.items(queue.queue_id, limit=500)
+            start = (queue.current_index + 1) if queue.current_index is not None else 0
+            for item in items[start : start + 100]:
+                if item.media_item is None:
+                    continue
+                try:
+                    upcoming.append(self._track_from_item(item.media_item))
+                except ValueError:
+                    continue
         await self.session.publish_track(track, upcoming, queue_title)
         self._attr_current_media = media
         self._attr_playback_state = PlaybackState.PLAYING
