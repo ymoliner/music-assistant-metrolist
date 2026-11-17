@@ -230,6 +230,12 @@ class MetroSession:
                 self.logger.info("Metrolist guest joined: %s", _one(fields, 2, b"Guest").decode())
             elif kind == "user_left":
                 self.logger.info("Metrolist guest left: %s", _one(fields, 2, b"Guest").decode())
+            elif kind == "join_request":
+                user_id = _one(fields, 1, b"").decode()
+                username = _one(fields, 2, b"Guest").decode()
+                if user_id:
+                    self.logger.info("Auto-approving Metrolist join request from %s", username)
+                    await self._send("approve_join", _str(1, user_id))
             elif kind == "error":
                 self.logger.warning("Metro Server: %s", _one(fields, 2, b"unknown error").decode())
         if self.provider.player:
