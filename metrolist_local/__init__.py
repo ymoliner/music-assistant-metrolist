@@ -30,7 +30,7 @@ async def setup(
 class MetrolistLocalProvider(PlayerProvider):
     """Expose one local Metrolist player for each configured Android phone."""
 
-    players: dict[str, MetrolistLocalPlayer]
+    _local_players: dict[str, MetrolistLocalPlayer]
     hass_provider: Any
     android_package: str
 
@@ -74,7 +74,7 @@ class MetrolistLocalProvider(PlayerProvider):
             self.config.get_value("android_package", "com.metrolist.music")
         ).strip()
         services = self.config.get_value("notify_services", []) or []
-        self.players = {}
+        self._local_players = {}
         for raw_service in services:
             service = str(raw_service).strip()
             if service.startswith("notify."):
@@ -84,14 +84,14 @@ class MetrolistLocalProvider(PlayerProvider):
                     f"{raw_service!r} must be a Home Assistant mobile_app notify service."
                 )
             player = MetrolistLocalPlayer(self, service)
-            if player.player_id in self.players:
+            if player.player_id in self._local_players:
                 continue
-            self.players[player.player_id] = player
+            self._local_players[player.player_id] = player
             await self.mass.players.register(player)
 
     async def unload(self, is_removed: bool = False) -> None:
         """Unregister phone players before unloading this provider."""
-        for player_id in tuple(getattr(self, "players", {})):
+        for player_id in tuple(getattr(self, "_local_players", {})):
             if self.mass.players.get_player(player_id):
                 await self.mass.players.unregister(player_id)
         await super().unload(is_removed)
