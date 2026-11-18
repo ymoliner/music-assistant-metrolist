@@ -1,0 +1,11 @@
+{
+  "type": "player",
+  "domain": "metrolist_local",
+  "name": "Metrolist Local Playback",
+  "description": "Open YouTube Music tracks in Metrolist on Android phones using Home Assistant Companion notifications.",
+  "codeowners": ["@ymoliner"],
+  "tier": "community",
+  "stage": "experimental",
+  "requirements": [],
+  "multi_instance": true
+}
