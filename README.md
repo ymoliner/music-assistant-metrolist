@@ -1,10 +1,13 @@
-# Music Assistant — Metrolist Listen Together
+# Music Assistant — Metrolist Providers
 
-An experimental Music Assistant player provider that creates a Metrolist Listen Together room. Music Assistant is the room host; Metrolist joins as a guest and plays the YouTube Music tracks locally.
+This repository contains two experimental player providers:
+
+- **Metrolist Listen Together** sends tracks to a Metro Server room; phones join the room in Metrolist.
+- **Metrolist Local Playback** opens the selected YouTube Music track directly in Metrolist on Android through the Home Assistant Companion App. It does not use Listen Together or Metro Server.
 
 ## Home Assistant OS add-on
 
-The standard add-on cannot load a local provider ZIP or run `install.sh`. It uses an immutable container, and this script intentionally refuses to modify an add-on container. The supported Marketplace route is to publish a release and have the provider admitted to Music Assistant's community catalog. This repository has not been published or admitted yet.
+The standard add-on does not offer a supported local-provider installer. Providers can be copied into its running container, but an add-on image update removes those files. A Marketplace release would require admission to Music Assistant's community catalog; this repository is not listed there.
 
 ## Docker install
 
@@ -22,10 +25,13 @@ If more than one Music Assistant container is running, pass its container name:
 
 This installs into the running container and restarts it. Container replacement or image updates remove the installed files; re-run the script afterward.
 
-## Setup
+## Home Assistant add-on setup
 
-After installation, in Music Assistant open **Settings → Player Providers → Add** and select **Metrolist Listen Together**. Enter the Metro Server URL and room host name. The room code appears in the server log and the new player's name. In Metrolist, use **Listen Together → Join Room** and enter the code.
+For a manually installed provider, copy its provider directory into `music_assistant/providers/` inside the add-on container and restart it.
 
-Only YouTube Music tracks can be played, because each Metrolist device resolves and streams the track itself. The provider has not been exercised against a live server and is experimental.
+For **Metrolist Local Playback**, configure the Home Assistant plugin first, then add the provider and enter one `notify.mobile_app_<phone>` service suffix per Android phone. Each phone becomes its own Music Assistant player. The phone needs the Home Assistant Companion App; no phone IP or Metro Server URL is used.
 
-See [provider README](metrolist_listen_together/README.md) for details.
+For **Metrolist Listen Together**, add that provider and configure the Metro Server URL and room host name. Join the generated room code from Metrolist.
+
+See [local provider README](metrolist_local/README.md) and [Listen Together README](metrolist_listen_together/README.md).
+
