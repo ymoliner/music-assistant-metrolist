@@ -38,14 +38,22 @@ class MetrolistDeviceConnectPlayer(Player):
 
     async def play_media(self, media: PlayerMedia) -> None:
         tracks = self._queue_tracks(media)
-        requested_track_id = self._track_for_media(media)
+        try:
+            requested_track_id = self._track_for_media(media)
+        except ValueError:
+            # Queue items can have an opaque/unavailable MA URI even though the
+            # selected queue row has a valid YouTube Music provider mapping.
+            # _queue_tracks starts at that row when queue_item_id matched.
+            requested_track_id = None
         current_index = next(
             (idx for idx, track in enumerate(tracks) if track["id"] == requested_track_id),
             None,
         )
+        if current_index is None and requested_track_id is None and media.queue_item_id and media.source_id and tracks:
+            current_index = 0
         if current_index is None:
-            # Never silently start the first queue entry when MA's selected item
-            # and its provider mapping disagree. That makes the wrong song play.
+            # Never silently start the first queue entry when the selected item
+            # cannot be resolved from its queue row or YouTube Music URI.
             tracks = [self._song_from_media(media)]
             current_index = 0
             self.provider.logger.warning(
