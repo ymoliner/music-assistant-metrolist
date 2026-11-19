@@ -34,7 +34,7 @@ class MetrolistDeviceConnectPlayer(Player):
 
     @property
     def poll_interval(self) -> int:
-        return 2 if self._attr_playback_state == PlaybackState.PLAYING else 20
+        return 1 if self._attr_playback_state == PlaybackState.PLAYING else 20
 
     async def play_media(self, media: PlayerMedia) -> None:
         tracks = self._queue_tracks(media)
@@ -104,6 +104,9 @@ class MetrolistDeviceConnectPlayer(Player):
 
     async def seek(self, position: int) -> None:
         self._position_ms = max(0, int(position * 1000))
+        self._attr_elapsed_time = self._position_ms / 1000
+        self._attr_elapsed_time_last_updated = time.time()
+        self.update_state()
         await self._command("SEEK", positionMs=self._position_ms)
 
     async def next_track(self) -> None:
@@ -119,8 +122,14 @@ class MetrolistDeviceConnectPlayer(Player):
         self.update_state()
 
     async def poll(self) -> None:
-        self._attr_elapsed_time = self._position_ms // 1000
-        self._attr_elapsed_time_last_updated = time.time()
+        now = time.time()
+        if self._playing and self._attr_playback_state == PlaybackState.PLAYING:
+            elapsed_ms = max(0, int((now - self._attr_elapsed_time_last_updated) * 1000))
+            self._position_ms += elapsed_ms
+            if self._duration_ms:
+                self._position_ms = min(self._position_ms, self._duration_ms)
+        self._attr_elapsed_time = self._position_ms / 1000
+        self._attr_elapsed_time_last_updated = now
         self.update_state()
 
     async def _command(self, action: str, **kwargs: Any) -> None:
