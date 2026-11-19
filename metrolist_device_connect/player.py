@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from music_assistant.models.player import Player, PlayerMedia
 from music_assistant_models.enums import PlaybackState, PlayerFeature
@@ -212,11 +212,16 @@ class MetrolistDeviceConnectPlayer(Player):
 
     @classmethod
     def _song_from_media(cls, media: PlayerMedia) -> dict[str, Any]:
-        item_id = cls._id_from_uri(media.uri)
-        if not item_id and media.custom_data:
-            item_id = cls._id_from_uri(media.custom_data.get("original_uri"))
+        original_uri = (media.custom_data or {}).get("original_uri")
+        item_id = cls._id_from_uri(media.uri) or cls._id_from_uri(original_uri)
         if not item_id:
-            raise ValueError("Could not resolve this queue item to an original YouTube Music track")
+            uri_source = cls._uri_source(media.uri)
+            original_source = cls._uri_source(original_uri)
+            raise ValueError(
+                "Could not resolve this queue item to an original YouTube Music track "
+                f"(uri_source={uri_source}, original_uri_source={original_source}, "
+                f"queue_item={bool(media.queue_item_id)}, source_queue={bool(media.source_id)})"
+            )
         artists = [{"id": None, "name": name.strip()} for name in (media.artist or "").split(",") if name.strip()]
         return {"id": item_id, "title": media.title or item_id, "thumbnail": media.image_url,
                 "artists": artists, "album": {"id": None, "name": media.album} if media.album else None,
@@ -233,8 +238,35 @@ class MetrolistDeviceConnectPlayer(Player):
             if separator and provider.lower().startswith("ytmusic"):
                 value = item_id.strip("/")
                 return value if 6 <= len(value) <= 32 else None
+
+        # Accept YouTube Music custom schemes, whose underscore is not a valid
+        # RFC URI scheme and therefore is not parsed normally by urllib.
+        lowered = uri.lower()
+        for prefix in ("ytmusic_free://", "ytmusic://"):
+            if lowered.startswith(prefix):
+                value = uri[len(prefix):].strip("/").rsplit("/", 1)[-1].split("?", 1)[0]
+                return value if 6 <= len(value) <= 32 else None
+
         parsed = urlparse(uri)
+        host = (parsed.hostname or "").lower()
+        if host in {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"}:
+            value = (parse_qs(parsed.query).get("v") or [""])[0]
+            return value if 6 <= len(value) <= 32 else None
+        if host == "youtu.be":
+            value = parsed.path.strip("/").split("/", 1)[0]
+            return value if 6 <= len(value) <= 32 else None
         if not parsed.scheme.lower().startswith("ytmusic"):
             return None
         value = (parsed.netloc + parsed.path).strip("/").rsplit("/", 1)[-1]
         return value if 6 <= len(value) <= 32 else None
+
+    @staticmethod
+    def _uri_source(uri: str | None) -> str:
+        """Return only the URI provider/scheme for safe diagnostics, never its full value."""
+        if not uri:
+            return "missing"
+        if "--" in uri:
+            return uri.split("--", 1)[0][:40]
+        if "://" in uri:
+            return uri.split("://", 1)[0][:40]
+        return "unqualified"
