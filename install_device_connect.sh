@@ -27,7 +27,7 @@ if [[ ! -f "$provider_source/manifest.json" ]]; then
   trap 'find "$tmp_dir" -type f -delete; rmdir "$tmp_dir" 2>/dev/null || true' EXIT
   provider_source="$tmp_dir/metrolist_device_connect"
   mkdir -p "$provider_source"
-  for file in __init__.py account.py session.py player.py manifest.json; do
+  for file in __init__.py account.py session.py player.py setup_flow.py manifest.json; do
     curl --fail --silent --show-error --location \
       "https://raw.githubusercontent.com/$repo/$ref/metrolist_device_connect/$file" \
       --output "$provider_source/$file"
