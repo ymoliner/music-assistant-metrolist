@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-installer_url="https://raw.githubusercontent.com/ymoliner/music-assistant-metrolist/dad28a5d38759a86823797b9ce84334cda3b8574/install_device_connect.sh"
+installer_url="https://raw.githubusercontent.com/ymoliner/music-assistant-metrolist/63d69a021d83f90788f25531ad7cfa63b0747fd8/install_device_connect.sh"
 if ! command -v curl >/dev/null 2>&1; then
   echo "curl is required to fetch the installer from GitHub." >&2
   exit 2
