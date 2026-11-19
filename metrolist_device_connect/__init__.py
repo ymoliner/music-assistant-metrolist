@@ -109,9 +109,21 @@ class MetrolistDeviceConnectProvider(PlayerProvider):
             return
 
         addresses = getattr(info, "parsed_addresses", lambda: [])()
-        # Prefer IPv4 for the common Home Assistant LAN setup; keep IPv6 support.
-        addresses = sorted(addresses, key=lambda address: ipaddress.ip_address(address).version != 4)
-        address = next((value for value in addresses if not ipaddress.ip_address(value).is_link_local), None)
+        shared_ipv4 = ipaddress.ip_network("100.64.0.0/10")
+
+        def address_priority(value: str) -> int:
+            address = ipaddress.ip_address(value)
+            if address.is_link_local or address.is_loopback or address.is_unspecified:
+                return 10
+            if address.version == 4 and address.is_private:
+                return 0
+            if address.version == 6 and address.is_private:
+                return 1
+            if address.version == 4 and address in shared_ipv4:
+                return 2
+            return 10
+
+        address = next((value for value in sorted(addresses, key=address_priority) if address_priority(value) < 10), None)
         if not address or not getattr(info, "port", 0):
             return
         host = f"[{address}]" if ":" in address else address
@@ -121,7 +133,11 @@ class MetrolistDeviceConnectProvider(PlayerProvider):
         if endpoint == self._discovered_endpoint:
             return
         self._discovered_endpoint = endpoint
-        self.logger.info("Found paired Metrolist device on the network; using its current advertised endpoint.")
+        self.logger.info(
+            "Found paired Metrolist device at %s:%s; using its current advertised endpoint.",
+            address,
+            info.port,
+        )
         if self.session and self.session.url != endpoint:
             await self.session.close()
 
