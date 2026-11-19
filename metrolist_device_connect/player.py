@@ -274,6 +274,8 @@ class MetrolistDeviceConnectPlayer(Player):
             self._session_id = None
             self._playing = False
             self._queue_tracks_cache = []
+            self._queue_item_ids_cache = []
+            self._queue_source_id = None
             self._current_index = -1
             self._position_ms = 0
             self._attr_playback_state = PlaybackState.IDLE
