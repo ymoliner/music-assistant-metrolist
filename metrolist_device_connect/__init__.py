@@ -133,13 +133,14 @@ class MetrolistDeviceConnectProvider(PlayerProvider):
         if endpoint == self._discovered_endpoint:
             return
         self._discovered_endpoint = endpoint
-        self.logger.info(
-            "Found paired Metrolist device at %s:%s; using its current advertised endpoint.",
+        self.logger.debug(
+            "Found paired Metrolist endpoint at %s:%s; it will be used on the next connection.",
             address,
             info.port,
         )
-        if self.session and self.session.url != endpoint:
-            await self.session.close()
+        # Do not replace a live authenticated session when mDNS publishes an
+        # alternate address. Let the current socket continue; reconnects use
+        # the latest advertised endpoint if the phone drops it.
 
     def _receive_playback(self, message: dict[str, Any]) -> None:
         self.player.receive_playback(message)
