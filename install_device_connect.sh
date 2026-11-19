@@ -4,8 +4,13 @@ set -euo pipefail
 repo="ymoliner/music-assistant-metrolist"
 ref="${METROLIST_DEVICE_CONNECT_REF:-main}"
 container="${1:-}"
-script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-provider_source="$script_dir/metrolist_device_connect"
+script_source="${BASH_SOURCE[0]:-}"
+if [[ -n "$script_source" && -f "$script_source" ]]; then
+  script_dir="$(cd -- "$(dirname -- "$script_source")" && pwd)"
+  provider_source="$script_dir/metrolist_device_connect"
+else
+  provider_source=""
+fi
 tmp_dir=""
 
 if ! command -v docker >/dev/null 2>&1; then
