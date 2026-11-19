@@ -191,6 +191,17 @@ class MetrolistDeviceConnectPlayer(Player):
             try:
                 tracks.append(self._song(row.media_item))
             except ValueError:
+                if row.queue_item_id == media.queue_item_id:
+                    domains = sorted({
+                        str(getattr(mapping, "provider_domain", "") or "")
+                        for mapping in (getattr(row.media_item, "provider_mappings", ()) or ())
+                    })
+                    self.provider.logger.warning(
+                        "Selected Music Assistant queue row has no YouTube Music track ID "
+                        "(mapping_domains=%s, uri_source=%s)",
+                        ",".join(domains) or "none",
+                        self._uri_source(getattr(row.media_item, "uri", None)),
+                    )
                 continue
         if not tracks and queue and media.queue_item_id:
             # The current item can sit beyond the bounded preview of a long queue.
@@ -201,6 +212,20 @@ class MetrolistDeviceConnectPlayer(Player):
                 except ValueError:
                     pass
         if not tracks:
+            domains = sorted({
+                str(getattr(mapping, "provider_domain", "") or "")
+                for mapping in (getattr(media, "provider_mappings", ()) or ())
+            })
+            self.provider.logger.warning(
+                "No mapped queue tracks were found for playback "
+                "(queue_rows=%d, selected_queue_row_found=%s, media_mapping_domains=%s, "
+                "uri_source=%s, original_uri_source=%s)",
+                len(items),
+                current is not None,
+                ",".join(domains) or "none",
+                self._uri_source(media.uri),
+                self._uri_source((media.custom_data or {}).get("original_uri")),
+            )
             tracks = [self._song_from_media(media)]
         return tracks
 
