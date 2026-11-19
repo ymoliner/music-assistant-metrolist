@@ -17,7 +17,7 @@ _ENTRIES = (
         key="endpoint",
         type=ConfigEntryType.STRING,
         label="Metrolist Device Connect WebSocket URL",
-        description="For example ws://192.168.1.40:8765/connect. Use an address reachable from Music Assistant.",
+        description="Enter the phone's current ws://IP:PORT/connect for initial pairing. After pairing, Music Assistant follows the phone's mDNS-advertised endpoint.",
         required=True,
     ),
     ConfigEntry(
