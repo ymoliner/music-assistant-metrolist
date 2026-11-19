@@ -211,6 +211,11 @@ class DeviceConnectSession:
                 self._code_transcript = code_transcript
                 self._pair_secret = hkdf(self._pair_secret, code_transcript, LABEL + b"/pair-secret")
                 self.pair_secret_bytes = unb64(self.pair_secret) if self.pair_secret else self._pair_secret
+            if not (self.local_identity["hasPair"] and payload.get("hasPair")):
+                # Either side may have forgotten the old pair. A new mutual
+                # pairing must use the fresh ECDH-derived secret on both peers,
+                # not a stale saved secret from the side that still remembers.
+                self.pair_secret_bytes = self._pair_secret
             if self.local_identity["hasPair"] and payload.get("hasPair"):
                 await self._send_proof("pair_proof", "reconnect")
             else:
