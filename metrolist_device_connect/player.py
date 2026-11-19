@@ -160,7 +160,9 @@ class MetrolistDeviceConnectPlayer(Player):
             playback = snapshot.get("playback") or {}
             if kind == "UPDATE" and ("positionMs" in message or message.get("seek", False) or "playing" in message):
                 self.provider.logger.info(
-                    "Metrolist playback update: position=%s ms, seek=%s, playing=%s",
+                    "Metrolist playback update: index=%s, trackRevision=%s, position=%s ms, seek=%s, playing=%s",
+                    message.get("index", "omitted"),
+                    message.get("trackRevision", "omitted"),
                     message.get("positionMs", "omitted"),
                     message.get("seek", "omitted"),
                     message.get("playing", "omitted"),
