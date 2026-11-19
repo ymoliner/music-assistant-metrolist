@@ -84,6 +84,7 @@ class DeviceConnectSession:
         self.send_seq = 0
         self.recv_seq = 0
         self.connected = False
+        self.stage = "opening WebSocket"
         self.peer_name = "Metrolist"
         self.peer_model = ""
         self.session_id = str(uuid.uuid4())
@@ -95,14 +96,18 @@ class DeviceConnectSession:
         self.pair_secret_bytes = unb64(self.pair_secret) if self.pair_secret else b""
 
     async def connect(self) -> None:
+        self.stage = "opening WebSocket"
         self.http = aiohttp.ClientSession()
         self.ws = await asyncio.wait_for(self.http.ws_connect(self.url, heartbeat=20, max_msg_size=MAX_PLAYBACK_BYTES + 65536), 10)
+        self.stage = "creating handshake"
         local_key = ec.generate_private_key(ec.SECP256R1())
         local_pub = local_key.public_key().public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
         local = {"version": VERSION, "role": "initiator", "deviceId": self.device_id, "nonce": b64(os.urandom(16)), "publicKey": b64(local_pub)}
         local_commit = _commitment(local["role"], self.device_id, unb64(local["nonce"]), local_pub)
+        self.stage = "sending handshake"
         await self._clear_send("hello_commit", {"version": VERSION, "role": "initiator", "deviceId": self.device_id, "commitment": b64(local_commit)})
         await self._clear_send("hello", local)
+        self.stage = "waiting for peer handshake"
         peer_commit_wire = await self._receive_clear("hello_commit")
         peer_commit_data = peer_commit_wire["payload"]
         peer_commit = unb64(peer_commit_data["commitment"])
@@ -114,6 +119,7 @@ class DeviceConnectSession:
         peer_pub_der = unb64(peer["publicKey"])
         if not hmac.compare_digest(peer_commit, _commitment("responder", peer["deviceId"], unb64(peer["nonce"]), peer_pub_der)):
             raise RuntimeError("Metrolist handshake commitment did not match")
+        self.stage = "validating peer handshake"
         shared = local_key.exchange(ec.ECDH(), serialization.load_der_public_key(peer_pub_der))
         transcript = _transcript(local, peer, local_commit, peer_commit)
         self._out_key = hkdf(shared, transcript, LABEL + b"/initiator")
@@ -129,8 +135,11 @@ class DeviceConnectSession:
         self.peer_identity = None
         self._hello_transcript = transcript
         self._pair_secret = hkdf(shared, transcript, LABEL + b"/pair-secret")
+        self.stage = "sending account identity"
         await self.send("identity", local_identity)
+        self.stage = "waiting for peer identity/pairing response"
         while not self.connected:
+            self.stage = "waiting for peer identity/pairing response"
             await self._handle(await self._recv())
 
     async def run(self) -> None:
@@ -188,6 +197,7 @@ class DeviceConnectSession:
 
     async def _handle(self, frame: dict[str, Any]) -> None:
         kind, payload = frame["type"], frame["payload"]
+        self.stage = f"processing peer {kind}"
         if kind == "identity":
             if payload.get("anonymous") or payload.get("fingerprint") != self.account_fingerprint or not payload.get("resolved"):
                 raise RuntimeError("Metrolist account identity does not match the configured account")
