@@ -178,6 +178,21 @@ class MetrolistDeviceConnectPlayer(Player):
                 self._current_index = index
 
             self._session_id = message.get("sessionId") or snapshot.get("sessionId") or self._session_id
+            if kind == "UPDATE" and not snapshot and index >= 0 and index != previous_index:
+                # A phone-side next/previous may move onto a queue item that is
+                # not in the cached MA queue. Ask the target for its authoritative
+                # queue snapshot so the displayed track can be mapped correctly.
+                self.provider.logger.info(
+                    "Metrolist changed to queue index %d; requesting a fresh queue snapshot",
+                    index,
+                )
+                self.provider.mass.create_task(
+                    self.provider.send_playback({
+                        "type": "ATTACH",
+                        "sessionId": self._session_id,
+                    }),
+                    task_name=f"metrolist-state-refresh-{self.provider.player_suffix}",
+                )
             self._queue_revision = int(message.get("queueRevision", snapshot.get("queueRevision", self._queue_revision)))
             self._revision = int(message.get("revision", snapshot.get("revision", self._revision)))
 
