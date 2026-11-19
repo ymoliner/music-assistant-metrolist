@@ -134,8 +134,9 @@ class MetrolistDeviceConnectPlayer(Player):
                 item = items[index]
                 artists = item.get("artists") or []
                 album = item.get("album") or {}
+                item_id = str(item.get("id", ""))
                 self._attr_current_media = PlayerMedia(
-                    uri=f"ytmusic://track/{item.get('id', '')}",
+                    uri=f"ytmusic_free--{item_id}",
                     title=item.get("title"), artist=", ".join(a.get("name", "") for a in artists),
                     album=album.get("name"), duration=(self._duration_ms / 1000 if self._duration_ms else None),
                     image_url=item.get("thumbnail"),
