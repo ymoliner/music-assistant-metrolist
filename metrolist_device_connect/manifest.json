@@ -1,0 +1,11 @@
+{
+  "type": "player",
+  "domain": "metrolist_device_connect",
+  "name": "Metrolist Device Connect",
+  "description": "Pair Music Assistant with a Metrolist device for live playback state and controls.",
+  "codeowners": ["@ymoliner"],
+  "tier": "community",
+  "stage": "experimental",
+  "requirements": ["cryptography>=41.0.0"],
+  "multi_instance": true
+}

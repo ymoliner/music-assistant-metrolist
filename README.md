@@ -1,31 +1,23 @@
-# Music Assistant — Metrolist Listen Together
+# Music Assistant — Metrolist Providers
 
-An experimental Music Assistant player provider that creates a Metrolist Listen Together room. Music Assistant is the room host; Metrolist joins as a guest and plays the YouTube Music tracks locally.
+This repository contains three experimental player providers:
 
-## Home Assistant OS add-on
+- **Metrolist Device Connect** is an experimental provider for direct Device Connect pairing, playback state, controls, and queue transfer. Live device pairing and playback have not yet been verified.
+- **Metrolist Listen Together** sends tracks to a Metro Server room; phones join the room in Metrolist.
+- **Metrolist Local Playback** opens YouTube Music tracks in Metrolist on Android through the Home Assistant Companion App.
 
-The standard add-on cannot load a local provider ZIP or run `install.sh`. It uses an immutable container, and this script intentionally refuses to modify an add-on container. The supported Marketplace route is to publish a release and have the provider admitted to Music Assistant's community catalog. This repository has not been published or admitted yet.
+## Home Assistant add-on install
+
+On a Home Assistant host shell with Docker access, run:
+
+```sh
+bash <(curl -fsSL https://raw.githubusercontent.com/ymoliner/music-assistant-metrolist/main/install_from_home_assistant.sh)
+```
+
+The installer downloads the provider files from this repository, copies them into the running Music Assistant add-on, and restarts it. If more than one Music Assistant add-on is running, pass its container name as the final argument. Manually copied files are removed when the add-on container is replaced or updated; rerun the installer after such an update. An ordinary Terminal & SSH add-on may not have access to the host Docker socket.
+
+After restart, add **Metrolist Device Connect** in Music Assistant → Settings → Player Providers. Enter the Metrolist WebSocket endpoint ending in `/connect` and provide the cookie and matching `dataSyncId` through the secure fields. Compare the pairing codes in Music Assistant and Metrolist, then approve the same code in Metrolist. See [the provider guide](metrolist_device_connect/README.md).
 
 ## Docker install
 
-On the Docker host, extract this repository and run:
-
-```sh
-./install.sh
-```
-
-If more than one Music Assistant container is running, pass its container name:
-
-```sh
-./install.sh music-assistant
-```
-
-This installs into the running container and restarts it. Container replacement or image updates remove the installed files; re-run the script afterward.
-
-## Setup
-
-After installation, in Music Assistant open **Settings → Player Providers → Add** and select **Metrolist Listen Together**. Enter the Metro Server URL and room host name. The room code appears in the server log and the new player's name. In Metrolist, use **Listen Together → Join Room** and enter the code.
-
-Only YouTube Music tracks can be played, because each Metrolist device resolves and streams the track itself. The provider has not been exercised against a live server and is experimental.
-
-See [provider README](metrolist_listen_together/README.md) for details.
+`install.sh` remains the installer for the older Listen Together provider on a regular Docker-hosted Music Assistant server. See [Metrolist Local Playback](metrolist_local/README.md) and [Metrolist Listen Together](metrolist_listen_together/README.md) for their setup flows.

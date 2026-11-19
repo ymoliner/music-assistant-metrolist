@@ -1,0 +1,220 @@
+"""Music Assistant player for a paired Metrolist Device Connect endpoint."""
+from __future__ import annotations
+
+import time
+from typing import Any
+from urllib.parse import urlparse
+
+from music_assistant.models.player import Player, PlayerMedia
+from music_assistant_models.enums import PlaybackState, PlayerFeature
+
+
+class MetrolistDeviceConnectPlayer(Player):
+    def __init__(self, provider: Any) -> None:
+        super().__init__(provider, f"metrolist_dc_{provider.player_suffix}")
+        self._attr_name = provider.player_name
+        self._attr_available = False
+        self._attr_powered = True
+        self._attr_playback_state = PlaybackState.IDLE
+        self._attr_supported_features = {
+            PlayerFeature.PLAY_MEDIA, PlayerFeature.PAUSE, PlayerFeature.SEEK,
+            PlayerFeature.POWER, PlayerFeature.NEXT_PREVIOUS,
+        }
+        self._session_id: str | None = None
+        self._queue_revision = 0
+        self._revision = 0
+        self._track_revision = 0
+        self._position_ms = 0
+        self._duration_ms = 0
+        self._playing = False
+
+    @property
+    def needs_poll(self) -> bool:
+        return True
+
+    @property
+    def poll_interval(self) -> int:
+        return 2 if self._attr_playback_state == PlaybackState.PLAYING else 20
+
+    async def play_media(self, media: PlayerMedia) -> None:
+        tracks = self._queue_tracks(media)
+        current_index = next((idx for idx, track in enumerate(tracks) if track["id"] == self._track_for_media(media)), 0)
+        self._session_id = self._session_id or self.provider.new_session_id()
+        self._revision += 1
+        self._queue_revision += 1
+        self._track_revision += 1
+        self._duration_ms = int((media.duration or 0) * 1000)
+        self._position_ms = 0
+        self._playing = True
+        snapshot = {
+            "sessionId": self._session_id,
+            "revision": self._revision,
+            "queueRevision": self._queue_revision,
+            "trackRevision": self._track_revision,
+            "anchorTimeMs": int(time.time() * 1000),
+            "queueStateId": self.provider.new_session_id(),
+            "playback": {
+                "queue": {"displayedItems": tracks, "originalItems": tracks, "currentIndex": current_index,
+                           "originalIndices": list(range(len(tracks)))},
+                "title": self.provider.queue_title or "Music Assistant",
+                "playing": True,
+                "positionMs": 0,
+                "durationMs": self._duration_ms,
+                "ready": True,
+            },
+        }
+        await self.provider.send_playback({"type": "TRANSFER", "sessionId": self._session_id, "snapshot": snapshot})
+        self._attr_current_media = media
+        self._attr_playback_state = PlaybackState.PLAYING
+        self._attr_elapsed_time = 0
+        self._attr_elapsed_time_last_updated = time.time()
+        self.update_state()
+
+    async def play(self) -> None:
+        await self._command("PLAY")
+
+    async def pause(self) -> None:
+        await self._command("PAUSE")
+
+    async def stop(self) -> None:
+        await self.pause()
+        self._attr_playback_state = PlaybackState.IDLE
+        self.update_state()
+
+    async def seek(self, position: int) -> None:
+        self._position_ms = max(0, int(position * 1000))
+        await self._command("SEEK", positionMs=self._position_ms)
+
+    async def next_track(self) -> None:
+        await self._command("NEXT")
+
+    async def previous_track(self) -> None:
+        await self._command("PREVIOUS")
+
+    async def power(self, powered: bool) -> None:
+        self._attr_powered = powered
+        if not powered:
+            await self.pause()
+        self.update_state()
+
+    async def poll(self) -> None:
+        self._attr_elapsed_time = self._position_ms // 1000
+        self._attr_elapsed_time_last_updated = time.time()
+        self.update_state()
+
+    async def _command(self, action: str, **kwargs: Any) -> None:
+        if not self._session_id:
+            return
+        await self.provider.send_playback({"type": "COMMAND", "sessionId": self._session_id,
+            "queueRevision": self._queue_revision,
+            "command": {"action": action, **kwargs}})
+        if action == "PLAY":
+            self._playing = True
+            self._attr_playback_state = PlaybackState.PLAYING
+        elif action == "PAUSE":
+            self._playing = False
+            self._attr_playback_state = PlaybackState.PAUSED
+        self.update_state()
+
+    def receive_playback(self, message: dict[str, Any]) -> None:
+        kind = message.get("type")
+        if kind in {"STATE", "UPDATE"}:
+            snapshot = message.get("snapshot") or {}
+            playback = snapshot.get("playback") or {}
+            queue = playback.get("queue") or {}
+            items = queue.get("displayedItems") or []
+            index = int(queue.get("currentIndex", -1))
+            self._session_id = message.get("sessionId") or snapshot.get("sessionId") or self._session_id
+            self._queue_revision = int(message.get("queueRevision", snapshot.get("queueRevision", self._queue_revision)))
+            self._revision = int(message.get("revision", snapshot.get("revision", self._revision)))
+            self._position_ms = int(message.get("positionMs", playback.get("positionMs", self._position_ms)))
+            self._duration_ms = int(message.get("durationMs", playback.get("durationMs", self._duration_ms)))
+            self._playing = bool(message.get("playing", playback.get("playing", self._playing)))
+            if 0 <= index < len(items):
+                item = items[index]
+                artists = item.get("artists") or []
+                album = item.get("album") or {}
+                self._attr_current_media = PlayerMedia(
+                    uri=f"ytmusic://track/{item.get('id', '')}",
+                    title=item.get("title"), artist=", ".join(a.get("name", "") for a in artists),
+                    album=album.get("name"), duration=(self._duration_ms / 1000 if self._duration_ms else None),
+                    image_url=item.get("thumbnail"),
+                )
+            self._attr_playback_state = PlaybackState.PLAYING if self._playing else PlaybackState.PAUSED
+            self._attr_elapsed_time = self._position_ms // 1000
+            self._attr_elapsed_time_last_updated = time.time()
+        elif kind == "RELEASE":
+            self._session_id = None
+            self._playing = False
+            self._attr_playback_state = PlaybackState.IDLE
+        self.update_state()
+
+    def _queue_tracks(self, media: PlayerMedia) -> list[dict[str, Any]]:
+        queue = self.mass.player_queues.get_active_queue(self.player_id)
+        items: list[Any] = []
+        if queue:
+            items = list(self.mass.player_queues.items(queue.queue_id, limit=100))
+            self.provider.queue_title = queue.display_name
+        current = None
+        if media.queue_item_id:
+            current = next((i for i, row in enumerate(items) if row.queue_item_id == media.queue_item_id), None)
+        source = items[current:] if current is not None else []
+        tracks = []
+        for row in source:
+            if not row.media_item:
+                continue
+            try:
+                tracks.append(self._song(row.media_item))
+            except ValueError:
+                continue
+        if not tracks:
+            tracks = [self._song_from_media(media)]
+        return tracks
+
+    def _track_for_media(self, media: PlayerMedia) -> str:
+        return self._song_from_media(media)["id"]
+
+    @classmethod
+    def _song(cls, item: Any) -> dict[str, Any]:
+        item_id = None
+        for mapping in getattr(item, "provider_mappings", ()) or ():
+            provider = (getattr(mapping, "provider_domain", "") or "").lower()
+            instance = (getattr(mapping, "provider_instance", "") or "").lower()
+            if provider.startswith("ytmusic") or instance.startswith("ytmusic"):
+                item_id = getattr(mapping, "item_id", None)
+                if item_id:
+                    break
+        if not item_id:
+            item_id = cls._id_from_uri(getattr(item, "uri", ""))
+        if not item_id:
+            raise ValueError("Queue item has no YouTube Music track mapping")
+        artists = [{"id": getattr(a, "item_id", None), "name": getattr(a, "name", "")}
+                   for a in (getattr(item, "artists", None) or [])]
+        album = getattr(item, "album", None)
+        metadata = getattr(item, "metadata", None)
+        images = getattr(metadata, "images", None) or []
+        return {"id": str(item_id), "title": getattr(item, "name", None) or str(item_id),
+                "thumbnail": images[0].path if images else None, "artists": artists,
+                "album": {"id": getattr(album, "item_id", None), "name": getattr(album, "name", "")} if album else None,
+                "duration": int((getattr(item, "duration", None) or 0) * 1000)}
+
+    @classmethod
+    def _song_from_media(cls, media: PlayerMedia) -> dict[str, Any]:
+        item_id = cls._id_from_uri(media.uri)
+        if not item_id:
+            queue = getattr(media, "queue_item_id", None)
+            raise ValueError("Could not resolve this queue item to an original YouTube Music track")
+        artists = [{"id": None, "name": name.strip()} for name in (media.artist or "").split(",") if name.strip()]
+        return {"id": item_id, "title": media.title or item_id, "thumbnail": media.image_url,
+                "artists": artists, "album": {"id": None, "name": media.album} if media.album else None,
+                "duration": int((media.duration or 0) * 1000)}
+
+    @staticmethod
+    def _id_from_uri(uri: str | None) -> str | None:
+        if not uri:
+            return None
+        parsed = urlparse(uri)
+        if not parsed.scheme.lower().startswith("ytmusic"):
+            return None
+        value = (parsed.netloc + parsed.path).strip("/").rsplit("/", 1)[-1]
+        return value if 6 <= len(value) <= 32 else None
