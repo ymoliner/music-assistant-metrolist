@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import re
 import secrets
@@ -45,6 +46,8 @@ class MetrolistDeviceConnectProvider(PlayerProvider):
         if parsed.scheme not in {"ws", "wss"} or not parsed.hostname or parsed.path != "/connect":
             raise ValueError("Enter a reachable ws:// or wss:// endpoint ending in /connect")
         self.endpoint = endpoint
+        self._discovered_endpoint: str | None = None
+        self._discovered_service_name: str | None = None
         self.cookie = str(self.get_setup_value("cookie", "") or "")
         self.data_sync_id = str(self.get_setup_value("data_sync_id", "") or "")
         if not self.cookie or not self.data_sync_id:
@@ -77,6 +80,50 @@ class MetrolistDeviceConnectProvider(PlayerProvider):
         self.peer_id = peer_id
         self.pair_secret = pair_secret
         self._update_setup_data("pair_state", json.dumps({"peer_id": peer_id, "pair_secret": pair_secret}), immediate=True)
+        # The first successful pair may happen after the discovery controller has
+        # already cached the phone's mDNS advertisement, so replay it now.
+        self.mass.create_task(
+            self.mass.discovery.run_provider_discovery(self),
+            task_name=f"metrolist-mdns-replay-{self.player_suffix}",
+        )
+
+    async def on_mdns_service_state_change(self, name: str, state_change: Any, info: Any) -> None:
+        """Track the paired phone's advertised endpoint as its ephemeral port changes."""
+        removed = getattr(state_change, "name", "") == "Removed"
+        if info is None:
+            if removed and name == self._discovered_service_name:
+                self._discovered_service_name = None
+                self._discovered_endpoint = None
+            return
+
+        properties = getattr(info, "decoded_properties", {}) or {}
+        discovered_peer_id = properties.get("deviceId") or properties.get(b"deviceId")
+        if isinstance(discovered_peer_id, bytes):
+            discovered_peer_id = discovered_peer_id.decode("utf-8", errors="ignore")
+        if not self.peer_id or str(discovered_peer_id or "") != self.peer_id:
+            return
+        if removed:
+            if name == self._discovered_service_name:
+                self._discovered_service_name = None
+                self._discovered_endpoint = None
+            return
+
+        addresses = getattr(info, "parsed_addresses", lambda: [])()
+        # Prefer IPv4 for the common Home Assistant LAN setup; keep IPv6 support.
+        addresses = sorted(addresses, key=lambda address: ipaddress.ip_address(address).version != 4)
+        address = next((value for value in addresses if not ipaddress.ip_address(value).is_link_local), None)
+        if not address or not getattr(info, "port", 0):
+            return
+        host = f"[{address}]" if ":" in address else address
+        scheme = urlparse(self.endpoint).scheme
+        endpoint = f"{scheme}://{host}:{info.port}/connect"
+        self._discovered_service_name = name
+        if endpoint == self._discovered_endpoint:
+            return
+        self._discovered_endpoint = endpoint
+        self.logger.info("Found paired Metrolist device on the network; using its current advertised endpoint.")
+        if self.session and self.session.url != endpoint:
+            await self.session.close()
 
     def _receive_playback(self, message: dict[str, Any]) -> None:
         self.player.receive_playback(message)
@@ -84,8 +131,9 @@ class MetrolistDeviceConnectProvider(PlayerProvider):
     async def _connection_loop(self) -> None:
         delay = 3
         while True:
+            endpoint = self._discovered_endpoint or self.endpoint
             session = DeviceConnectSession(
-                url=self.endpoint, device_id=self.device_id, device_name=self.device_name,
+                url=endpoint, device_id=self.device_id, device_name=self.device_name,
                 cookie=self.cookie, data_sync_id=self.data_sync_id, peer_id=self.peer_id,
                 pair_secret=self.pair_secret, save_pair=self._save_pair, logger=self.logger,
                 on_playback=self._receive_playback,
