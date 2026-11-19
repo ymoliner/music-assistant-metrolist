@@ -27,6 +27,8 @@ class MetrolistDeviceConnectPlayer(Player):
         self._position_ms = 0
         self._duration_ms = 0
         self._playing = False
+        self._queue_tracks_cache: list[dict[str, Any]] = []
+        self._current_index = -1
 
     @property
     def needs_poll(self) -> bool:
@@ -60,6 +62,8 @@ class MetrolistDeviceConnectPlayer(Player):
                 "Requested track was not found in the Music Assistant queue; "
                 "sending the selected track alone"
             )
+        self._queue_tracks_cache = tracks
+        self._current_index = current_index
         self._session_id = self._session_id or self.provider.new_session_id()
         self._revision += 1
         self._queue_revision += 1
@@ -152,16 +156,47 @@ class MetrolistDeviceConnectPlayer(Player):
             snapshot = message.get("snapshot") or {}
             playback = snapshot.get("playback") or {}
             queue = playback.get("queue") or {}
-            items = queue.get("displayedItems") or []
-            index = int(queue.get("currentIndex", -1))
+            items = queue.get("displayedItems")
+            if isinstance(items, list):
+                self._queue_tracks_cache = items
+
+            previous_index = self._current_index
+            index = int(queue.get("currentIndex", message.get("index", self._current_index)))
+            if index >= 0:
+                self._current_index = index
+
             self._session_id = message.get("sessionId") or snapshot.get("sessionId") or self._session_id
             self._queue_revision = int(message.get("queueRevision", snapshot.get("queueRevision", self._queue_revision)))
             self._revision = int(message.get("revision", snapshot.get("revision", self._revision)))
-            self._position_ms = int(message.get("positionMs", playback.get("positionMs", self._position_ms)))
-            self._duration_ms = int(message.get("durationMs", playback.get("durationMs", self._duration_ms)))
-            self._playing = bool(message.get("playing", playback.get("playing", self._playing)))
-            if 0 <= index < len(items):
-                item = items[index]
+
+            if "positionMs" in message:
+                self._position_ms = max(0, int(message["positionMs"]))
+            elif "positionMs" in playback:
+                self._position_ms = max(0, int(playback["positionMs"]))
+            elif kind == "UPDATE" and (message.get("seek", False) or (index >= 0 and index != previous_index)):
+                # DcSyncMessage omits default-valued positionMs=0. A seek-to-zero
+                # or new track therefore needs to reset the cached position.
+                self._position_ms = 0
+            elif snapshot and kind == "STATE":
+                self._position_ms = 0
+
+            if "durationMs" in message:
+                self._duration_ms = max(0, int(message["durationMs"]))
+            elif "durationMs" in playback:
+                self._duration_ms = max(0, int(playback["durationMs"]))
+            elif index >= 0 and index != previous_index and index < len(self._queue_tracks_cache):
+                self._duration_ms = int(self._queue_tracks_cache[index].get("duration") or 0)
+
+            if "playing" in message:
+                self._playing = bool(message["playing"])
+            elif snapshot:
+                self._playing = bool(playback.get("playing", False))
+            elif kind == "UPDATE":
+                # Metrolist serializes playing=false as an omitted default field.
+                self._playing = False
+
+            if 0 <= index < len(self._queue_tracks_cache):
+                item = self._queue_tracks_cache[index]
                 artists = item.get("artists") or []
                 album = item.get("album") or {}
                 item_id = str(item.get("id", ""))
@@ -172,11 +207,14 @@ class MetrolistDeviceConnectPlayer(Player):
                     image_url=item.get("thumbnail"),
                 )
             self._attr_playback_state = PlaybackState.PLAYING if self._playing else PlaybackState.PAUSED
-            self._attr_elapsed_time = self._position_ms // 1000
+            self._attr_elapsed_time = self._position_ms / 1000
             self._attr_elapsed_time_last_updated = time.time()
         elif kind == "RELEASE":
             self._session_id = None
             self._playing = False
+            self._queue_tracks_cache = []
+            self._current_index = -1
+            self._position_ms = 0
             self._attr_playback_state = PlaybackState.IDLE
         self.update_state()
 
