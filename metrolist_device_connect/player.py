@@ -29,6 +29,8 @@ class MetrolistDeviceConnectPlayer(Player):
         self._duration_ms = 0
         self._playing = False
         self._queue_tracks_cache: list[dict[str, Any]] = []
+        self._queue_item_ids_cache: list[str | None] = []
+        self._queue_source_id: str | None = None
         self._current_index = -1
 
     @property
@@ -58,6 +60,7 @@ class MetrolistDeviceConnectPlayer(Player):
             # Never silently start the first queue entry when the selected item
             # cannot be resolved from its queue row or YouTube Music URI.
             tracks = [self._song_from_media(media)]
+            self._queue_item_ids_cache = [media.queue_item_id]
             current_index = 0
             self.provider.logger.warning(
                 "Requested track was not found in the Music Assistant queue; "
@@ -240,16 +243,29 @@ class MetrolistDeviceConnectPlayer(Player):
                 # Metrolist serializes playing=false as an omitted default field.
                 self._playing = False
 
+            queue_track_changed = False
             if 0 <= index < len(self._queue_tracks_cache):
                 item = self._queue_tracks_cache[index]
                 artists = item.get("artists") or []
                 album = item.get("album") or {}
                 item_id = str(item.get("id", ""))
+                queue_item_id = (
+                    self._queue_item_ids_cache[index]
+                    if index < len(self._queue_item_ids_cache)
+                    else None
+                )
+                previous_media = self._attr_current_media
                 self._attr_current_media = PlayerMedia(
                     uri=f"ytmusic_free--{item_id}",
                     title=item.get("title"), artist=", ".join(a.get("name", "") for a in artists),
                     album=album.get("name"), duration=(self._duration_ms / 1000 if self._duration_ms else None),
                     image_url=item.get("thumbnail"),
+                    source_id=self._queue_source_id,
+                    queue_item_id=queue_item_id,
+                )
+                queue_track_changed = bool(
+                    queue_item_id
+                    and (previous_media is None or previous_media.queue_item_id != queue_item_id)
                 )
             self._attr_playback_state = PlaybackState.PLAYING if self._playing else PlaybackState.PAUSED
             self._attr_elapsed_time = self._position_ms / 1000
@@ -262,12 +278,17 @@ class MetrolistDeviceConnectPlayer(Player):
             self._position_ms = 0
             self._attr_playback_state = PlaybackState.IDLE
         self.update_state()
+        if kind in {"STATE", "UPDATE"} and queue_track_changed and self._queue_source_id:
+            # Music Assistant derives its queue's current item from the raw
+            # protocol media. Notify it after a phone-side track transition.
+            self.mass.player_queues.on_player_update(self, {})
 
     def _queue_tracks(self, media: PlayerMedia) -> list[dict[str, Any]]:
         # PlayerMedia.source_id is the queue ID that produced this request. Prefer it
         # over an inferred active queue, which can differ for synced or redirected players.
         queue = self.mass.player_queues.get(media.source_id) if media.source_id else None
         queue = queue or self.mass.player_queues.get_active_queue(self.player_id)
+        self._queue_source_id = queue.queue_id if queue else media.source_id
         items: list[Any] = []
         if queue:
             items = list(self.mass.player_queues.items(queue.queue_id, limit=500))
@@ -277,11 +298,13 @@ class MetrolistDeviceConnectPlayer(Player):
             current = next((i for i, row in enumerate(items) if row.queue_item_id == media.queue_item_id), None)
         source = items[current:] if current is not None else []
         tracks = []
+        self._queue_item_ids_cache = []
         for row in source:
             if not row.media_item:
                 continue
             try:
                 tracks.append(self._song(row.media_item))
+                self._queue_item_ids_cache.append(row.queue_item_id)
             except ValueError:
                 if row.queue_item_id == media.queue_item_id:
                     domains = sorted({
@@ -301,6 +324,7 @@ class MetrolistDeviceConnectPlayer(Player):
             if row and row.media_item:
                 try:
                     tracks = [self._song(row.media_item)]
+                    self._queue_item_ids_cache = [row.queue_item_id]
                 except ValueError:
                     pass
         if not tracks:
@@ -319,6 +343,7 @@ class MetrolistDeviceConnectPlayer(Player):
                 self._uri_source((media.custom_data or {}).get("original_uri")),
             )
             tracks = [self._song_from_media(media)]
+            self._queue_item_ids_cache = [media.queue_item_id]
         return tracks
 
     def _track_for_media(self, media: PlayerMedia) -> str:
