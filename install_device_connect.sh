@@ -4,12 +4,11 @@ set -euo pipefail
 repo="ymoliner/music-assistant-metrolist"
 ref="${METROLIST_DEVICE_CONNECT_REF:-main}"
 container="${1:-}"
-script_source="${BASH_SOURCE[0]:-}"
-if [[ -n "$script_source" && -f "$script_source" ]]; then
-  script_dir="$(cd -- "$(dirname -- "$script_source")" && pwd)"
-  provider_source="$script_dir/metrolist_device_connect"
-else
-  provider_source=""
+provider_source=""
+if [[ -f "$PWD/metrolist_device_connect/manifest.json" ]]; then
+  provider_source="$PWD/metrolist_device_connect"
+elif [[ "${0##*/}" != "bash" && -f "${0%/*}/metrolist_device_connect/manifest.json" ]]; then
+  provider_source="$(cd -- "${0%/*}/metrolist_device_connect" && pwd)"
 fi
 tmp_dir=""
 
