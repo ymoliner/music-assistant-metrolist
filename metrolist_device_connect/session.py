@@ -108,8 +108,8 @@ class DeviceConnectSession:
         await self._clear_send("hello_commit", {"version": VERSION, "role": "initiator", "deviceId": self.device_id, "commitment": b64(local_commit)})
         await self._clear_send("hello", local)
         self.stage = "waiting for peer handshake"
-        peer_commit_wire = await self._receive_clear("hello_commit")
-        peer_commit_data = peer_commit_wire["payload"]
+        # _receive_clear already decodes the envelope payload into a dictionary.
+        peer_commit_data = await self._receive_clear("hello_commit")
         peer_commit = unb64(peer_commit_data["commitment"])
         if len(peer_commit) != 32 or peer_commit_data.get("version") != VERSION or peer_commit_data.get("role") != "responder":
             raise RuntimeError("Metrolist sent an invalid handshake commitment")
