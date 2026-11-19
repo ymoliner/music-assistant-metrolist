@@ -36,34 +36,24 @@ class MetrolistDeviceConnectProvider(PlayerProvider):
     queue_title: str | None = None
 
     async def get_config_entries(self) -> tuple[ConfigEntry, ...]:
-        from music_assistant_models.config_entries import ConfigEntry
-        from music_assistant_models.enums import ConfigEntryType
-
-        return (
-            ConfigEntry(key="endpoint", type=ConfigEntryType.STRING, label="Metrolist Device Connect WebSocket URL",
-                description="For example ws://192.168.1.40:8765/connect. Use an address reachable from the Music Assistant add-on.", required=True),
-            ConfigEntry(key="cookie", type=ConfigEntryType.SECURE_STRING, label="YouTube Music cookie",
-                description="Paste the full cookie header here. It is stored as a secure Music Assistant setting. Never paste it into chat or logs.", required=True),
-            ConfigEntry(key="data_sync_id", type=ConfigEntryType.SECURE_STRING, label="Metrolist dataSyncId",
-                description="From Metrolist account diagnostics/settings. This value is stored securely and is needed with the cookie to identify the account.", required=True),
-            ConfigEntry(key="device_name", type=ConfigEntryType.STRING, label="Music Assistant device name", default_value="Music Assistant", required=True),
-        )
+        """Provider-specific values are collected by setup_flow.py."""
+        return ()
 
     async def handle_async_init(self) -> None:
-        endpoint = str(self.config.get_value("endpoint", "")).strip()
+        endpoint = str(self.get_setup_value("endpoint", "") or "").strip()
         parsed = urlparse(endpoint)
         if parsed.scheme not in {"ws", "wss"} or not parsed.hostname or parsed.path != "/connect":
             raise ValueError("Enter a reachable ws:// or wss:// endpoint ending in /connect")
         self.endpoint = endpoint
-        self.cookie = str(self.config.get_value("cookie", ""))
-        self.data_sync_id = str(self.config.get_value("data_sync_id", ""))
+        self.cookie = str(self.get_setup_value("cookie", "") or "")
+        self.data_sync_id = str(self.get_setup_value("data_sync_id", "") or "")
         if not self.cookie or not self.data_sync_id:
             raise ValueError("A YouTube Music cookie and Metrolist dataSyncId are required")
-        self.device_name = str(self.config.get_value("device_name", "Music Assistant")).strip() or "Music Assistant"
-        self.device_id = str(self.config.setup_data.get("device_id") or secrets.token_urlsafe(9))
+        self.device_name = str(self.get_setup_value("device_name", "Music Assistant") or "Music Assistant").strip() or "Music Assistant"
+        self.device_id = str(self.get_setup_value("device_id", "") or secrets.token_urlsafe(9))
         self._update_setup_data("device_id", self.device_id, immediate=True)
         try:
-            state = json.loads(str(self.config.setup_data.get("pair_state") or "{}"))
+            state = json.loads(str(self.get_setup_value("pair_state", "{}") or "{}"))
             self.peer_id = str(state.get("peer_id", ""))
             self.pair_secret = str(state.get("pair_secret", ""))
         except (TypeError, ValueError):
