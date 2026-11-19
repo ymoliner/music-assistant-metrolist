@@ -173,6 +173,14 @@ class MetrolistDeviceConnectPlayer(Player):
             items = queue.get("displayedItems")
             if isinstance(items, list):
                 self._queue_tracks_cache = items
+            if kind == "STATE":
+                state_index = int(queue.get("currentIndex", message.get("index", self._current_index)))
+                self.provider.logger.info(
+                    "Metrolist state snapshot: index=%d, trackRevision=%s, queueItems=%d",
+                    state_index,
+                    message.get("trackRevision", snapshot.get("trackRevision", "omitted")),
+                    len(items) if isinstance(items, list) else 0,
+                )
 
             previous_index = self._current_index
             index = int(queue.get("currentIndex", message.get("index", self._current_index)))
