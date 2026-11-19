@@ -24,6 +24,7 @@ class MetrolistDeviceConnectPlayer(Player):
         self._queue_revision = 0
         self._revision = 0
         self._track_revision = 0
+        self._last_received_track_revision = 0
         self._position_ms = 0
         self._duration_ms = 0
         self._playing = False
@@ -64,6 +65,7 @@ class MetrolistDeviceConnectPlayer(Player):
             )
         self._queue_tracks_cache = tracks
         self._current_index = current_index
+        self._last_received_track_revision = self._track_revision + 1
         self._session_id = self._session_id or self.provider.new_session_id()
         self._revision += 1
         self._queue_revision += 1
@@ -178,12 +180,20 @@ class MetrolistDeviceConnectPlayer(Player):
                 self._current_index = index
 
             self._session_id = message.get("sessionId") or snapshot.get("sessionId") or self._session_id
-            if kind == "UPDATE" and not snapshot and index >= 0 and index != previous_index:
+            incoming_track_revision = int(
+                message.get("trackRevision", snapshot.get("trackRevision", self._last_received_track_revision))
+            )
+            track_changed = incoming_track_revision != self._last_received_track_revision
+            self._last_received_track_revision = incoming_track_revision
+            snapshot_items = queue.get("displayedItems")
+            if kind == "UPDATE" and track_changed and not isinstance(snapshot_items, list):
                 # A phone-side next/previous may move onto a queue item that is
                 # not in the cached MA queue. Ask the target for its authoritative
                 # queue snapshot so the displayed track can be mapped correctly.
                 self.provider.logger.info(
-                    "Metrolist changed to queue index %d; requesting a fresh queue snapshot",
+                    "Metrolist track revision changed (%d -> %d, index %d); requesting a fresh queue snapshot",
+                    incoming_track_revision - 1,
+                    incoming_track_revision,
                     index,
                 )
                 self.provider.mass.create_task(
