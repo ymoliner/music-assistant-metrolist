@@ -100,8 +100,12 @@ class MetrolistDeviceConnectProvider(PlayerProvider):
             except asyncio.CancelledError:
                 raise
             except Exception as err:
-                # Deliberately avoid logging exception text from a credential-bearing session.
-                self.logger.warning("Metrolist Device Connect session ended (%s); retrying.", type(err).__name__)
+                # Report the protocol stage without exposing cookies, account IDs, or pair secrets.
+                self.logger.warning(
+                    "Metrolist Device Connect failed during %s (%s); retrying.",
+                    session.stage,
+                    type(err).__name__,
+                )
             finally:
                 await session.close()
                 self.session = None
