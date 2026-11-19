@@ -162,7 +162,9 @@ class DeviceConnectSession:
 
     async def _receive_clear(self, expected: str) -> dict[str, Any]:
         wire = json.loads(await asyncio.wait_for(self.ws.receive_str(), 10))
-        if wire.get("type") != expected or wire.get("encrypted") or wire.get("seq") != 0:
+        # kotlinx.serialization omits default-valued fields (encrypted=false, seq=0).
+        # Treat omitted fields as their protocol defaults when decoding cleartext handshake frames.
+        if wire.get("type") != expected or wire.get("encrypted", False) or wire.get("seq", 0) != 0:
             raise RuntimeError("Metrolist sent an invalid handshake frame")
         return json.loads(wire["payload"])
 
