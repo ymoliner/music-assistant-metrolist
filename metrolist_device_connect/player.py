@@ -48,7 +48,7 @@ class MetrolistDeviceConnectPlayer(Player):
             # and its provider mapping disagree. That makes the wrong song play.
             tracks = [self._song_from_media(media)]
             current_index = 0
-            self.logger.warning(
+            self.provider.logger.warning(
                 "Requested track was not found in the Music Assistant queue; "
                 "sending the selected track alone"
             )
