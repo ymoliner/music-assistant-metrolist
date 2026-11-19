@@ -213,6 +213,13 @@ class MetrolistDeviceConnectPlayer(Player):
     def _id_from_uri(uri: str | None) -> str | None:
         if not uri:
             return None
+        # Music Assistant provider URIs use "provider_instance--item_id".
+        # YouTube Music Free therefore appears as "ytmusic_free--VIDEO_ID".
+        if "://" not in uri:
+            provider, separator, item_id = uri.partition("--")
+            if separator and provider.lower().startswith("ytmusic"):
+                value = item_id.strip("/")
+                return value if 6 <= len(value) <= 32 else None
         parsed = urlparse(uri)
         if not parsed.scheme.lower().startswith("ytmusic"):
             return None
