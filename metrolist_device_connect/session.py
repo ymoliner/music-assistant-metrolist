@@ -280,7 +280,7 @@ class DeviceConnectSession:
 
     async def _local_info(self) -> None:
         await self.send("device_info", {"deviceId": self.device_id, "deviceName": self.device_name,
-            "model": "Music Assistant", "playbackVersion": 4, "supportsPlaybackClock": True,
+            "model": "Music Assistant", "playbackVersion": 4, "supportsPlaybackClock": False,
             "supportsPlaybackPitch": False, "deviceType": "desktop"})
         await self.send_playback({"type": "ATTACH", "auto": True})
 
