@@ -38,7 +38,20 @@ class MetrolistDeviceConnectPlayer(Player):
 
     async def play_media(self, media: PlayerMedia) -> None:
         tracks = self._queue_tracks(media)
-        current_index = next((idx for idx, track in enumerate(tracks) if track["id"] == self._track_for_media(media)), 0)
+        requested_track_id = self._track_for_media(media)
+        current_index = next(
+            (idx for idx, track in enumerate(tracks) if track["id"] == requested_track_id),
+            None,
+        )
+        if current_index is None:
+            # Never silently start the first queue entry when MA's selected item
+            # and its provider mapping disagree. That makes the wrong song play.
+            tracks = [self._song_from_media(media)]
+            current_index = 0
+            self.logger.warning(
+                "Requested track was not found in the Music Assistant queue; "
+                "sending the selected track alone"
+            )
         self._session_id = self._session_id or self.provider.new_session_id()
         self._revision += 1
         self._queue_revision += 1
