@@ -108,6 +108,9 @@ class MetrolistDeviceConnectPlayer(Player):
 
     async def seek(self, position: int) -> None:
         self._position_ms = max(0, int(position * 1000))
+        self.provider.logger.info(
+            "Sending Metrolist seek to %d ms", self._position_ms
+        )
         self._attr_elapsed_time = self._position_ms / 1000
         self._attr_elapsed_time_last_updated = time.time()
         self.update_state()
@@ -155,6 +158,13 @@ class MetrolistDeviceConnectPlayer(Player):
         if kind in {"STATE", "UPDATE"}:
             snapshot = message.get("snapshot") or {}
             playback = snapshot.get("playback") or {}
+            if kind == "UPDATE" and ("positionMs" in message or message.get("seek", False) or "playing" in message):
+                self.provider.logger.info(
+                    "Metrolist playback update: position=%s ms, seek=%s, playing=%s",
+                    message.get("positionMs", "omitted"),
+                    message.get("seek", "omitted"),
+                    message.get("playing", "omitted"),
+                )
             queue = playback.get("queue") or {}
             items = queue.get("displayedItems")
             if isinstance(items, list):
