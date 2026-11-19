@@ -100,11 +100,20 @@ class MetrolistDeviceConnectProvider(PlayerProvider):
             except asyncio.CancelledError:
                 raise
             except Exception as err:
-                # Report the protocol stage without exposing cookies, account IDs, or pair secrets.
+                # Include only a whitelisted protocol field name for KeyError diagnostics.
+                missing = (
+                    str(err.args[0])
+                    if isinstance(err, KeyError) and err.args and err.args[0] in {
+                        "payload", "commitment", "version", "role", "deviceId", "nonce", "publicKey"
+                    }
+                    else ""
+                )
+                detail = f", missing field {missing}" if missing else ""
                 self.logger.warning(
-                    "Metrolist Device Connect failed during %s (%s); retrying.",
+                    "Metrolist Device Connect failed during %s (%s%s); retrying.",
                     session.stage,
                     type(err).__name__,
+                    detail,
                 )
             finally:
                 await session.close()
