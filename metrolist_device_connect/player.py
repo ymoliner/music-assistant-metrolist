@@ -151,10 +151,13 @@ class MetrolistDeviceConnectPlayer(Player):
         self.update_state()
 
     def _queue_tracks(self, media: PlayerMedia) -> list[dict[str, Any]]:
-        queue = self.mass.player_queues.get_active_queue(self.player_id)
+        # PlayerMedia.source_id is the queue ID that produced this request. Prefer it
+        # over an inferred active queue, which can differ for synced or redirected players.
+        queue = self.mass.player_queues.get(media.source_id) if media.source_id else None
+        queue = queue or self.mass.player_queues.get_active_queue(self.player_id)
         items: list[Any] = []
         if queue:
-            items = list(self.mass.player_queues.items(queue.queue_id, limit=100))
+            items = list(self.mass.player_queues.items(queue.queue_id, limit=500))
             self.provider.queue_title = queue.display_name
         current = None
         if media.queue_item_id:
@@ -168,6 +171,14 @@ class MetrolistDeviceConnectPlayer(Player):
                 tracks.append(self._song(row.media_item))
             except ValueError:
                 continue
+        if not tracks and queue and media.queue_item_id:
+            # The current item can sit beyond the bounded preview of a long queue.
+            row = self.mass.player_queues.get_item(queue.queue_id, media.queue_item_id)
+            if row and row.media_item:
+                try:
+                    tracks = [self._song(row.media_item)]
+                except ValueError:
+                    pass
         if not tracks:
             tracks = [self._song_from_media(media)]
         return tracks
@@ -202,8 +213,9 @@ class MetrolistDeviceConnectPlayer(Player):
     @classmethod
     def _song_from_media(cls, media: PlayerMedia) -> dict[str, Any]:
         item_id = cls._id_from_uri(media.uri)
+        if not item_id and media.custom_data:
+            item_id = cls._id_from_uri(media.custom_data.get("original_uri"))
         if not item_id:
-            queue = getattr(media, "queue_item_id", None)
             raise ValueError("Could not resolve this queue item to an original YouTube Music track")
         artists = [{"id": None, "name": name.strip()} for name in (media.artist or "").split(",") if name.strip()]
         return {"id": item_id, "title": media.title or item_id, "thumbnail": media.image_url,
