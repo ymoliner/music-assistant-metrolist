@@ -26,6 +26,7 @@ class MetrolistDeviceConnectPlayer(Player):
         self._track_revision = 0
         self._last_received_track_revision = 0
         self._position_ms = 0
+        self._pending_seek_ms: int | None = None
         self._duration_ms = 0
         self._playing = False
         self._queue_tracks_cache: list[dict[str, Any]] = []
@@ -112,14 +113,19 @@ class MetrolistDeviceConnectPlayer(Player):
         self.update_state()
 
     async def seek(self, position: int) -> None:
-        self._position_ms = max(0, int(position * 1000))
+        # Music Assistant passes seconds; Device Connect commands carry milliseconds.
+        requested_ms = max(0, int(position * 1000))
+        self._pending_seek_ms = requested_ms
         self.provider.logger.info(
-            "Sending Metrolist seek to %d ms", self._position_ms
+            "Sending Metrolist seek: MA position=%s seconds, Device Connect positionMs=%d",
+            position,
+            requested_ms,
         )
-        self._attr_elapsed_time = self._position_ms / 1000
+        self._position_ms = requested_ms
+        self._attr_elapsed_time = requested_ms / 1000
         self._attr_elapsed_time_last_updated = time.time()
         self.update_state()
-        await self._command("SEEK", positionMs=self._position_ms)
+        await self._command("SEEK", positionMs=requested_ms)
 
     async def next_track(self) -> None:
         await self._command("NEXT")
@@ -217,16 +223,27 @@ class MetrolistDeviceConnectPlayer(Player):
             self._queue_revision = int(message.get("queueRevision", snapshot.get("queueRevision", self._queue_revision)))
             self._revision = int(message.get("revision", snapshot.get("revision", self._revision)))
 
-            if "positionMs" in message:
-                self._position_ms = max(0, int(message["positionMs"]))
-            elif "positionMs" in playback:
-                self._position_ms = max(0, int(playback["positionMs"]))
-            elif kind == "UPDATE" and (message.get("seek", False) or (index >= 0 and index != previous_index)):
-                # DcSyncMessage omits default-valued positionMs=0. A seek-to-zero
-                # or new track therefore needs to reset the cached position.
+            reported_position = message.get("positionMs", playback.get("positionMs"))
+            if reported_position is not None:
+                reported_position = max(0, int(reported_position))
+                if self._pending_seek_ms is not None:
+                    self.provider.logger.info(
+                        "Metrolist seek response: requested=%d ms, reported=%d ms",
+                        self._pending_seek_ms,
+                        reported_position,
+                    )
+                    self._pending_seek_ms = None
+                self._position_ms = reported_position
+            elif kind == "UPDATE" and message.get("seek", False):
+                # positionMs=0 can be omitted by the protocol. Preserve a nonzero
+                # requested position if the peer sends a seek update without it.
+                if self._pending_seek_ms in (None, 0):
+                    self._position_ms = 0
+                    self._pending_seek_ms = None
+            elif (kind in {"UPDATE", "STATE"}) and index >= 0 and index != previous_index:
+                # A new track starts at zero when the peer omits its default position.
                 self._position_ms = 0
-            elif snapshot and kind == "STATE":
-                self._position_ms = 0
+                self._pending_seek_ms = None
 
             if "durationMs" in message:
                 self._duration_ms = max(0, int(message["durationMs"]))
