@@ -1,6 +1,6 @@
 name: Metrolist Provider Keeper
 slug: metrolist_device_connect_keeper
-version: "1.0.0"
+version: "1.0.1"
 description: Restores the Metrolist Device Connect provider after Music Assistant container replacement
 url: https://github.com/ymoliner/music-assistant-metrolist
 arch:
