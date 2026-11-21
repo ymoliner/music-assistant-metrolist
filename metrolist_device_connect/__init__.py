@@ -63,7 +63,7 @@ class MetrolistDeviceConnectProvider(PlayerProvider):
             self.peer_id, self.pair_secret = "", ""
         suffix = re.sub(r"[^a-z0-9]+", "_", self.device_id.lower()).strip("_")[:16]
         self.player_suffix = suffix or "device"
-        self.player_name = "Metrolist Device Connect"
+        self.player_name = f"Metrolist Device Connect — {self.device_name}"
         self.player = MetrolistDeviceConnectPlayer(self)
         await self.mass.players.register(self.player)
         self.connection_task = asyncio.create_task(self._connection_loop(), name=f"metrolist-dc-{suffix}")
