@@ -37,8 +37,9 @@ _ENTRIES = (
     ConfigEntry(
         key="device_name",
         type=ConfigEntryType.STRING,
-        label="Music Assistant device name",
-        default_value="Music Assistant",
+        label="Device name (phone, PC, etc.)",
+        description="Add one provider instance per Metrolist installation. Use a different name for each, such as Phone or PC.",
+        default_value="Phone",
         required=True,
     ),
 )
