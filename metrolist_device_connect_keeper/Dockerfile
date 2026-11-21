@@ -1,6 +1,5 @@
 FROM alpine:3.22
 RUN apk add --no-cache bash curl docker-cli python3
-COPY provider/ /provider/
 COPY run.sh /run.sh
 RUN chmod +x /run.sh
 CMD ["/run.sh"]
