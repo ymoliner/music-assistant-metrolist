@@ -13,6 +13,9 @@ docker_api: true
 options:
   addon_container: ""
   check_interval: 30
+map:
+  - type: local_apps
+    read_only: true
 schema:
   addon_container: str
   check_interval: int(15, 3600)
