@@ -39,7 +39,11 @@ while true; do
       providers_dir="$(docker exec "$container" python -c 'from pathlib import Path; import music_assistant; print(Path(music_assistant.__file__).parent / "providers")' 2>/dev/null || true)"
       if [[ -n "$providers_dir" ]]; then
         installed_version="$(docker exec "$container" sh -c "cat '$providers_dir/metrolist_device_connect/VERSION' 2>/dev/null" || true)"
-        if [[ "$installed_version" != "$wanted_version" ]]; then
+        provider_import_ok=0
+        if docker exec "$container" python -c 'import music_assistant.providers.metrolist_device_connect' >/dev/null 2>&1; then
+          provider_import_ok=1
+        fi
+        if [[ "$installed_version" != "$wanted_version" || "$provider_import_ok" -ne 1 ]]; then
           echo "Installing Metrolist Device Connect $wanted_version into $container"
           if docker exec "$container" mkdir -p "$providers_dir/metrolist_device_connect" &&
              docker cp "$provider_source/." "$container:$providers_dir/metrolist_device_connect/" &&
