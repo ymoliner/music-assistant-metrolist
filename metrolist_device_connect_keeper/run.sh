@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -u
 
-provider_source=/provider
+provider_source=/local_apps/metrolist_device_connect_keeper/provider
 version_file="$provider_source/VERSION"
 if [[ ! -s "$version_file" ]]; then
   echo "Provider bundle is missing VERSION; rebuild this local add-on." >&2
