@@ -2,7 +2,7 @@
 
 This repository contains three experimental player providers:
 
-- **Metrolist Device Connect** is an experimental provider for direct Device Connect pairing, playback state, controls, and queue transfer. Live device pairing and playback have not yet been verified.
+- **Metrolist Device Connect** is an experimental player provider for direct Device Connect pairing, playback state, controls, seeking, and queue transfer.
 - **Metrolist Listen Together** sends tracks to a Metro Server room; phones join the room in Metrolist.
 - **Metrolist Local Playback** opens YouTube Music tracks in Metrolist on Android through the Home Assistant Companion App.
 
