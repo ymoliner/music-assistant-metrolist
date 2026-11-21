@@ -37,8 +37,8 @@ if [[ -d /addons && -w /addons ]]; then
     echo "Refusing to overwrite an unrelated local add-on at $addon_dir." >&2
     exit 2
   fi
-  mkdir -p /addons
-  cp -a "$stage_addon" "$addon_dir"
+  mkdir -p "$addon_dir"
+  cp -a "$stage_addon/." "$addon_dir/"
 else
   supervisor_container=""
   while IFS= read -r name; do
