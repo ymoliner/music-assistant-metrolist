@@ -67,4 +67,4 @@ docker restart "$container" >/dev/null
 
 printf 'Installed Metrolist Device Connect into %s and restarted the add-on.\n' "$container"
 printf 'Add it under Music Assistant → Settings → Player Providers.\n'
-printf 'Manual provider files are removed when the add-on container is replaced or updated.\n'
+printf 'This direct install is temporary; use install_persistent_from_home_assistant.sh to restore it after container replacement or updates.\n'
