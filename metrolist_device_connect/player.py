@@ -237,7 +237,12 @@ class MetrolistDeviceConnectPlayer(Player):
             elif kind == "UPDATE" and message.get("seek", False):
                 # positionMs=0 can be omitted by the protocol. Preserve a nonzero
                 # requested position if the peer sends a seek update without it.
-                if self._pending_seek_ms in (None, 0):
+                if self._pending_seek_ms not in (None, 0):
+                    self.provider.logger.warning(
+                        "Metrolist sent seek=True without positionMs after a seek to %d ms; preserving the requested position",
+                        self._pending_seek_ms,
+                    )
+                else:
                     self._position_ms = 0
                     self._pending_seek_ms = None
             elif (kind in {"UPDATE", "STATE"}) and index >= 0 and index != previous_index:
