@@ -14,4 +14,4 @@ Then in Home Assistant:
 
 This add-on needs Docker API access to copy files into the Music Assistant container and restart it after an update. Home Assistant only exposes that socket when protection mode is off. Its code is local under `/addons`; it starts at boot and keeps retrying while Music Assistant is starting.
 
-To update the provider code later, rerun the persistent installer and rebuild/reinstall this local add-on so its bundled provider files update.
+To update provider code later, rerun the persistent installer. The keeper reads provider files from the persistent local-apps folder and installs the new version on its next check. Rebuild the keeper only when its own Dockerfile or run script changes.
