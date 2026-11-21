@@ -1,6 +1,6 @@
 # Metrolist Device Connect
 
-This experimental Music Assistant player provider implements a direct connection to Metrolist's Device Connect WebSocket endpoint. It is intended to pair with one Android or desktop installation, report playback state, support play/pause/seek/next/previous, and transfer YouTube Music tracks. Live device pairing and playback have not yet been verified.
+This experimental Music Assistant player provider implements a direct connection to Metrolist's Device Connect WebSocket endpoint. Add one provider instance per Metrolist installation (for example, one for a phone and one for a PC). Each instance pairs independently and gets its own named Music Assistant player.
 
 ## Configure
 
@@ -11,7 +11,7 @@ This experimental Music Assistant player provider implements a direct connection
 
 The account cookie must include `SAPISID`, `__Secure-3PAPISID`, or `__Secure-1PAPISID`. Use the same signed-in YouTube Music account in Metrolist and the cookie source. A `dataSyncId` is required for account matching.
 
-## Manual installation in a Home Assistant Music Assistant add-on
+## Persistent Home Assistant installation\n\nRun `install_persistent_from_home_assistant.sh` from a host terminal with Docker access, then refresh the local app/add-on store and install **Metrolist Provider Keeper**. Turn off Protection mode for that add-on, start it, and enable Start on boot. The keeper restores the provider when Music Assistant's container is replaced or updated. It uses the Home Assistant Docker API socket. See [the keeper guide](../metrolist_device_connect_keeper/README.md).\n\n## Manual installation in a Home Assistant Music Assistant add-on
 
 This provider is not yet in the Music Assistant Marketplace. On the Docker host that runs Home Assistant, copy this directory into the add-on's `music_assistant/providers` directory and restart the add-on. From a checkout or extracted archive:
 
