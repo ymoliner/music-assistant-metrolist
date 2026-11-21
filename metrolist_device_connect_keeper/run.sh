@@ -3,16 +3,21 @@ set -u
 
 provider_source=/local_apps/metrolist_device_connect_keeper/provider
 version_file="$provider_source/VERSION"
-if [[ ! -s "$version_file" ]]; then
-  echo "Provider bundle is missing VERSION; rebuild this local add-on." >&2
+if [[ ! -d "$provider_source" ]]; then
+  echo "Persistent provider folder is missing at $provider_source." >&2
   exit 1
 fi
-wanted_version="$(cat "$version_file")"
 addon_container="$(python3 -c 'import json; print(json.load(open("/data/options.json")).get("addon_container", ""))' 2>/dev/null || true)"
 check_interval="$(python3 -c 'import json; print(json.load(open("/data/options.json")).get("check_interval", 30))' 2>/dev/null || echo 30)"
 [[ "$check_interval" =~ ^[0-9]+$ ]] || check_interval=30
 
 while true; do
+  wanted_version="$(cat "$version_file" 2>/dev/null || true)"
+  if [[ -z "$wanted_version" ]]; then
+    echo "Provider bundle is updating or missing VERSION; retrying in $check_interval seconds" >&2
+    sleep "$check_interval"
+    continue
+  fi
   if [[ -n "$addon_container" ]]; then
     candidates=("$addon_container")
   else
